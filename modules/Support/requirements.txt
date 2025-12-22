@@ -1,0 +1,27 @@
+# McQueen Connection Support Bot Requirements
+
+# Core telegram bot library
+python-telegram-bot==20.8
+
+# HTTP client
+aiohttp==3.9.1
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Process management
+psutil>=5.9.0
+
+# Database integration (для работы с основным ботом)
+sqlalchemy>=2.0.0
+asyncpg>=0.29.0
+
+# System monitoring
+psutil>=5.9.0
+
+
+# GigaChat dependencies
+certifi>=2023.0.0
+
+# Optional for better development
+loguru>=0.7.2

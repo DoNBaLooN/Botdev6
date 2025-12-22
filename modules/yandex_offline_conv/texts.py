@@ -1,0 +1,1 @@
+LOG_PREFIX = "[YandexOfflineConv]"
