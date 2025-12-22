@@ -24,10 +24,10 @@ from config import (
     REMNAWAVE_PASSWORD,
     REMNAWAVE_TOKEN_LOGIN_ENABLED,
 )
+from core.settings.management_config import MANAGEMENT_CONFIG, update_management_config
 from database import async_session_maker
 from database.models import Admin, Server
 from handlers.buttons import MAIN_MENU
-from middlewares import maintenance
 from middlewares.maintenance import MaintenanceModeMiddleware
 
 from . import settings, texts
@@ -61,6 +61,25 @@ def _hint_for_error(err: str) -> str | None:
             return hint
     return None
 
+
+def _is_maintenance_enabled() -> bool:
+    return bool(MANAGEMENT_CONFIG.get("MAINTENANCE_ENABLED", False))
+
+
+async def _set_maintenance_mode(enabled: bool) -> None:
+    if _is_maintenance_enabled() == enabled:
+        return
+
+    new_config = dict(MANAGEMENT_CONFIG)
+    new_config["MAINTENANCE_ENABLED"] = enabled
+
+    try:
+        async with async_session_maker() as session:
+            await update_management_config(session, new_config)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning("Failed to update maintenance mode flag: %s", exc)
+
+
 _original_mm_call = MaintenanceModeMiddleware.__call__
 
 
@@ -71,7 +90,7 @@ async def _patched_mm_call(
     data: dict[str, Any],
 ) -> Any:
     user_id = None
-    if maintenance.maintenance_mode:
+    if _is_maintenance_enabled():
         if isinstance(event, Message):
             user_id = event.from_user.id
         elif isinstance(event, CallbackQuery):
@@ -233,12 +252,12 @@ async def _monitor_panel(bot: Bot) -> None:
                     else:
                         error_msg = retry_err
 
-            if is_available and maintenance.maintenance_mode and panel_available and not manual_maintenance_active:
+            if is_available and _is_maintenance_enabled() and panel_available and not manual_maintenance_active:
                 manual_maintenance_active = True
                 manual_maintenance_start = datetime.utcnow()
                 logger.info("Manual maintenance mode enabled while panel is available")
 
-            if manual_maintenance_active and not maintenance.maintenance_mode:
+            if manual_maintenance_active and not _is_maintenance_enabled():
                 attempts_count, bonus = await _finalize_maintenance_window(
                     bot,
                     started_at=manual_maintenance_start,
@@ -255,7 +274,7 @@ async def _monitor_panel(bot: Bot) -> None:
 
             if is_available and not panel_available:
                 panel_available = True
-                maintenance.maintenance_mode = False
+                await _set_maintenance_mode(False)
                 manual_maintenance_active = False
                 manual_maintenance_start = None
                 attempts_count, bonus = await _finalize_maintenance_window(
@@ -271,7 +290,7 @@ async def _monitor_panel(bot: Bot) -> None:
                 )
             elif not is_available and panel_available:
                 panel_available = False
-                maintenance.maintenance_mode = True
+                await _set_maintenance_mode(True)
                 maintenance_start = datetime.utcnow()
                 manual_maintenance_active = False
                 manual_maintenance_start = None
