@@ -730,6 +730,55 @@ def _instrument_update_trial() -> None:
     logger.info("%s Instrumented update_trial for trial tracking", texts.LOG_PREFIX)
 
 
+def _instrument_handle_utm_link() -> None:
+    from handlers import start as start_handlers
+
+    original = getattr(start_handlers, "handle_utm_link", None)
+    if original is None or getattr(original, _PATCH_FLAG_ATTR, False):
+        return
+
+    signature = inspect.signature(original)
+
+    @functools.wraps(original)
+    async def wrapped(*args, **kwargs):
+        try:
+            bound = signature.bind_partial(*args, **kwargs)
+        except TypeError:
+            logger.exception(
+                "%s Failed to bind arguments for handle_utm_link instrumentation",
+                texts.LOG_PREFIX,
+            )
+            return await original(*args, **kwargs)
+
+        utm_code = bound.arguments.get("utm_code")
+        cleaned_utm, cid = _trim_utm_code(utm_code)
+
+        if cleaned_utm and cleaned_utm != utm_code:
+            logger.debug(
+                "%s Trimmed cid from utm_code=%r -> %r (cid=%s)",
+                texts.LOG_PREFIX,
+                utm_code,
+                cleaned_utm,
+                _mask_cid(cid),
+            )
+            bound.arguments["utm_code"] = cleaned_utm
+            return await original(**bound.arguments)
+
+        return await original(*args, **kwargs)
+
+    setattr(original, _PATCH_FLAG_ATTR, True)
+    setattr(wrapped, _PATCH_FLAG_ATTR, True)
+    start_handlers.handle_utm_link = wrapped
+    replaced = _replace_function_references(original, wrapped)
+    if replaced:
+        logger.debug(
+            "%s handle_utm_link references updated in %s locations",
+            texts.LOG_PREFIX,
+            replaced,
+        )
+    logger.info("%s Instrumented handle_utm_link for UTM trimming", texts.LOG_PREFIX)
+
+
 def install_instrumentation() -> None:
     global _INSTRUMENTATION_INSTALLED
     if _INSTRUMENTATION_INSTALLED:
@@ -738,6 +787,7 @@ def install_instrumentation() -> None:
     _instrument_create_key_on_cluster()
     _instrument_add_payment()
     _instrument_update_trial()
+    _instrument_handle_utm_link()
     _INSTRUMENTATION_INSTALLED = True
 
 def _iter_counter_configs() -> list[dict[str, str]]:
@@ -845,6 +895,16 @@ def extract_cid(part: str) -> Tuple[str | None, str | None, str | None]:
             return None, cleaned_part, counter.get("tid") if counter else None
 
     return None, None, None
+
+
+def _trim_utm_code(utm_code: str | None) -> tuple[str | None, str | None]:
+    if not utm_code or not isinstance(utm_code, str):
+        return utm_code, None
+
+    cid, cleaned_part, _ = extract_cid(utm_code)
+    if cleaned_part:
+        return cleaned_part, cid
+    return utm_code, cid
 
 
 def is_valid_cid(value: str | None) -> bool:
