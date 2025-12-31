@@ -797,6 +797,14 @@ def extract_cid(part: str) -> Tuple[str | None, str | None, str | None]:
             remainder = stripped_suffix
         elif base_prefix and trimmed_lower == base_prefix:
             cleaned_part = trimmed_part.rstrip(_PREFIX_STRIP_CHARS) or trimmed_part
+            logger.debug(
+                "%s Prefix trim match (base): part=%r prefix=%r base_prefix=%r cleaned_part=%r",
+                texts.LOG_PREFIX,
+                trimmed_part,
+                prefix,
+                base_prefix,
+                cleaned_part,
+            )
             return None, cleaned_part, counter.get("tid") if counter else None
         elif not prefix:
             remainder = trimmed_part
@@ -818,6 +826,17 @@ def extract_cid(part: str) -> Tuple[str | None, str | None, str | None]:
             if idx != -1:
                 cleaned_part = trimmed_part[:idx]
         cleaned_part = cleaned_part.rstrip(_PREFIX_STRIP_CHARS) or None
+        masked_candidate = mask_cid(candidate) if candidate else None
+        logger.debug(
+            "%s Prefix trim: part=%r prefix=%r base_prefix=%r remainder=%r candidate=%r cleaned_part=%r",
+            texts.LOG_PREFIX,
+            trimmed_part,
+            prefix,
+            base_prefix,
+            remainder,
+            masked_candidate,
+            cleaned_part,
+        )
 
         if candidate and _CID_PATTERN.fullmatch(candidate):
             return candidate, cleaned_part, counter.get("tid") if counter else None
