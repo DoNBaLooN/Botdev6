@@ -115,8 +115,12 @@ WITHDRAW_USER_REJECT = (
 )
 
 ADMIN_WITHDRAW_TITLE = "🧾 <b>Заявки на вывод партнёрам</b>"
+ADMIN_WITHDRAW_DETAIL_TITLE = "🧾 <b>Заявка на вывод</b>"
 ADMIN_WITHDRAW_EMPTY = "Заявок не найдено."
+ADMIN_WITHDRAW_NOT_FOUND = "Заявка не найдена."
 ADMIN_WITHDRAW_CARD = "Карта: {masked}"
+ADMIN_WITHDRAW_LIST_LINE = "№{id} • {status} • {amount:.2f} {currency} • <code>{tg_id}</code> • {created}"
+ADMIN_WITHDRAW_BUTTON = "№{id} • {amount:.2f} {currency} • {status}"
 ADMIN_WITHDRAW_LINE = (
     "№{id} • {status}\n"
     "Пользователь: <code>{tg_id}</code>\n"
