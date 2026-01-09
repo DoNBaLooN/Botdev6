@@ -29,7 +29,7 @@ from hooks.hooks import register_hook
 from logger import logger
 
 from . import db, settings, texts
-from .models import AffiliateAccount, AffiliateBalance
+from .models import AffiliateAccount, AffiliateBalance, AffiliateWithdrawal
 
 
 router = Router(name="affiliate")
@@ -680,33 +680,36 @@ async def _render_admin_list(
         page_size=settings.DEFAULT_PAGE_SIZE,
     )
     total_pages = max(1, (total + settings.DEFAULT_PAGE_SIZE - 1) // settings.DEFAULT_PAGE_SIZE)
-    balances = await db.get_balance_map(session, [w.tg_id for w in withdrawals])
     lines = [texts.ADMIN_WITHDRAW_TITLE, ""]
     if not withdrawals:
         lines.append(texts.ADMIN_WITHDRAW_EMPTY)
     else:
         for withdraw in withdrawals:
-            balance = balances.get(withdraw.tg_id)
-            available = Decimal(balance.available_amount or 0) if balance else Decimal("0")
-            hold = Decimal(balance.hold_amount or 0) if balance else Decimal("0")
             lines.append(
-                texts.ADMIN_WITHDRAW_LINE.format(
+                texts.ADMIN_WITHDRAW_LIST_LINE.format(
                     id=withdraw.id,
                     status=texts.STATUS_TITLES.get(withdraw.status, withdraw.status),
                     tg_id=withdraw.tg_id,
                     amount=Decimal(withdraw.amount or 0),
                     currency=settings.CURRENCY,
                     created=texts.format_datetime(withdraw.created_at),
-                    method=settings.PAYOUT_METHODS.get(withdraw.method, withdraw.method),
-                    card_line=texts.ADMIN_WITHDRAW_CARD.format(masked=withdraw.card_snapshot_masked),
-                    available=available,
-                    hold=hold,
-                    admin=withdraw.admin_id or "—",
                 )
             )
     text = "\n".join(lines)
 
     builder = InlineKeyboardBuilder()
+    for withdraw in withdrawals:
+        builder.row(
+            InlineKeyboardButton(
+                text=texts.ADMIN_WITHDRAW_BUTTON.format(
+                    id=withdraw.id,
+                    amount=Decimal(withdraw.amount or 0),
+                    currency=settings.CURRENCY,
+                    status=texts.STATUS_TITLES.get(withdraw.status, withdraw.status),
+                ),
+                callback_data=f"affiliate:admin:withdraw|{withdraw.id}",
+            )
+        )
     status_buttons = []
     for status_key in ("pending", "paid", "rejected", "all"):
         label = texts.STATUS_TITLES.get(status_key, status_key.title())
@@ -783,6 +786,82 @@ async def _render_admin_list(
     )
 
 
+async def _render_admin_detail(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    *,
+    withdrawal_id: int,
+) -> None:
+    data = await state.get_data()
+    filters = data.get(
+        "affiliate_admin_filters",
+        {"status": "pending", "page": 1, "period": 30, "tg": "-"},
+    )
+    back_callback = (
+        f"affiliate:admin:list|{filters.get('status', 'pending')}|"
+        f"{filters.get('page', 1)}|{filters.get('period', 30)}|{filters.get('tg', '-')}"
+    )
+    withdrawal = await session.get(AffiliateWithdrawal, withdrawal_id)
+    if not withdrawal:
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text=texts.BTN_ADMIN_BACK, callback_data=back_callback))
+        await edit_or_send_message(
+            message,
+            texts.ADMIN_WITHDRAW_NOT_FOUND,
+            reply_markup=builder.as_markup(),
+            disable_web_page_preview=True,
+            force_text=True,
+        )
+        return
+    balance = await db.get_balance(session, withdrawal.tg_id)
+    available = Decimal(balance.available_amount or 0)
+    hold = Decimal(balance.hold_amount or 0)
+    status_title = texts.STATUS_TITLES.get(withdrawal.status, withdrawal.status)
+    text = "\n".join(
+        [
+            texts.ADMIN_WITHDRAW_DETAIL_TITLE,
+            "",
+            texts.ADMIN_WITHDRAW_LINE.format(
+                id=withdrawal.id,
+                status=status_title,
+                tg_id=withdrawal.tg_id,
+                amount=Decimal(withdrawal.amount or 0),
+                currency=settings.CURRENCY,
+                created=texts.format_datetime(withdrawal.created_at),
+                method=settings.PAYOUT_METHODS.get(withdrawal.method, withdrawal.method),
+                card_line=texts.ADMIN_WITHDRAW_CARD.format(masked=withdrawal.card_snapshot_masked),
+                available=available,
+                hold=hold,
+                admin=withdrawal.admin_id or "—",
+            ),
+        ]
+    )
+    builder = InlineKeyboardBuilder()
+    if withdrawal.status == "pending":
+        builder.row(
+            InlineKeyboardButton(
+                text="✅ Оплата проведена",
+                callback_data=f"admin:affiliate:withdraw:paid|{withdrawal.id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Не проведена",
+                callback_data=f"admin:affiliate:withdraw:reject|{withdrawal.id}",
+            ),
+        )
+    builder.row(
+        InlineKeyboardButton(text="👤 Открыть пользователя", url=f"tg://user?id={withdrawal.tg_id}")
+    )
+    builder.row(InlineKeyboardButton(text=texts.BTN_ADMIN_BACK, callback_data=back_callback))
+    await edit_or_send_message(
+        message,
+        text,
+        reply_markup=builder.as_markup(),
+        disable_web_page_preview=True,
+        force_text=True,
+    )
+
+
 @router.callback_query(F.data.startswith("affiliate:admin:list"))
 async def admin_list(callback: CallbackQuery, session: AsyncSession, state: FSMContext):
     if not await _admin_check(callback):
@@ -791,6 +870,21 @@ async def admin_list(callback: CallbackQuery, session: AsyncSession, state: FSMC
     await callback.answer()
     status, page, period, tg_filter = _parse_admin_callback(callback.data)
     await _render_admin_list(callback.message, session, state, status=status, page=page, period=period, tg_filter=tg_filter)
+
+
+@router.callback_query(F.data.startswith("affiliate:admin:withdraw|"))
+async def admin_withdraw_detail(callback: CallbackQuery, session: AsyncSession, state: FSMContext):
+    if not await _admin_check(callback):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+    parts = callback.data.split("|", 1)
+    try:
+        withdrawal_id = int(parts[1])
+    except (IndexError, ValueError):
+        await callback.answer(texts.ADMIN_WITHDRAW_NOT_FOUND, show_alert=True)
+        return
+    await _render_admin_detail(callback.message, session, state, withdrawal_id=withdrawal_id)
 
 
 async def _render_admin_stats(message: Message, session: AsyncSession, *, page: int) -> None:
