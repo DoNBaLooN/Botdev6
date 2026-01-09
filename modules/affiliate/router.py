@@ -1171,34 +1171,35 @@ async def periodic_notifications_hook(bot: Any, session: AsyncSession, **_: Any)
     except Exception as exc:  # noqa: BLE001
         await session.rollback()
         logger.error("[Affiliate] Ошибка релиза начислений: %s", exc)
-    balances: list[AffiliateBalance] = []
-    try:
-        result = await session.execute(
-            select(AffiliateBalance).where(AffiliateBalance.available_amount >= settings.MIN_PAYOUT_RUB)
-        )
-        balances = result.scalars().all()
-    except Exception as exc:  # noqa: BLE001
-        logger.error("[Affiliate] Ошибка выборки балансов: %s", exc)
-    for balance in balances:
-        can_notify = await db.can_notify(
-            session,
-            tg_id=balance.tg_id,
-            action="user_threshold",
-            period=settings.USER_REMINDER_PERIOD,
-        )
-        if not can_notify:
-            continue
+    if settings.ENABLE_USER_THRESHOLD_NOTIFICATIONS:
+        balances: list[AffiliateBalance] = []
         try:
-            await bot.send_message(
-                balance.tg_id,
-                texts.USER_THRESHOLD_REMINDER.format(
-                    amount=Decimal(balance.available_amount or 0),
-                    currency=settings.CURRENCY,
-                ),
+            result = await session.execute(
+                select(AffiliateBalance).where(AffiliateBalance.available_amount >= settings.MIN_PAYOUT_RUB)
             )
-            await db.mark_notification(session, tg_id=balance.tg_id, action="user_threshold")
+            balances = result.scalars().all()
         except Exception as exc:  # noqa: BLE001
-            logger.error("[Affiliate] Ошибка уведомления пользователя: %s", exc)
+            logger.error("[Affiliate] Ошибка выборки балансов: %s", exc)
+        for balance in balances:
+            can_notify = await db.can_notify(
+                session,
+                tg_id=balance.tg_id,
+                action="user_threshold",
+                period=settings.USER_REMINDER_PERIOD,
+            )
+            if not can_notify:
+                continue
+            try:
+                await bot.send_message(
+                    balance.tg_id,
+                    texts.USER_THRESHOLD_REMINDER.format(
+                        amount=Decimal(balance.available_amount or 0),
+                        currency=settings.CURRENCY,
+                    ),
+                )
+                await db.mark_notification(session, tg_id=balance.tg_id, action="user_threshold")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("[Affiliate] Ошибка уведомления пользователя: %s", exc)
     try:
         pending = await db.get_pending_for_admin_reminder(session, older_than=settings.ADMIN_PENDING_REMINDER)
         if pending:
