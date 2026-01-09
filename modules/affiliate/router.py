@@ -815,6 +815,13 @@ async def _render_admin_detail(
         )
         return
     balance = await db.get_balance(session, withdrawal.tg_id)
+    card_number = withdrawal.card_snapshot_masked
+    account = await session.get(AffiliateAccount, withdrawal.tg_id)
+    if account and account.card_encrypted:
+        try:
+            card_number = db.decrypt_card(bytes(account.card_encrypted))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("[Affiliate] Не удалось расшифровать карту для заявки: %s", exc, exc_info=True)
     available = Decimal(balance.available_amount or 0)
     hold = Decimal(balance.hold_amount or 0)
     status_title = texts.STATUS_TITLES.get(withdrawal.status, withdrawal.status)
@@ -830,7 +837,7 @@ async def _render_admin_detail(
                 currency=settings.CURRENCY,
                 created=texts.format_datetime(withdrawal.created_at),
                 method=settings.PAYOUT_METHODS.get(withdrawal.method, withdrawal.method),
-                card_line=texts.ADMIN_WITHDRAW_CARD.format(masked=withdrawal.card_snapshot_masked),
+                card_line=texts.ADMIN_WITHDRAW_CARD.format(number=card_number),
                 available=available,
                 hold=hold,
                 admin=withdrawal.admin_id or "—",
