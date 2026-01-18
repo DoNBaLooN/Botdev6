@@ -244,13 +244,11 @@ async def _prepare_utm_stats(session: AsyncSession, page: int) -> tuple[str, Any
     previous_start, previous_end = await db.get_month_bounds(previous_ref)
 
     raw_stats = await db.get_utm_stats(
-        session,
-        current_start,
-        current_end,
-        previous_start,
-        previous_end,
-        today_start_utc,
-        today_end_utc,
+    session,
+    current_start,
+    current_end,
+    previous_start,
+    previous_end,
     )
 
     items: list[dict[str, Any]] = []
