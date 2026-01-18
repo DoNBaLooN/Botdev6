@@ -389,13 +389,23 @@ async def get_utm_stats(
     if TrackingSourceModel is None or UserModel is None:
         raise RuntimeError("TrackingSource or User model is unavailable")
 
-    _, _, Payment = await _get_models(session)
+    KeyModelLocal, PlanModelLocal, Payment = await _get_models(session)
     if today_start is None or today_end is None:
         now_utc = datetime.utcnow()
         today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
 
     payment_table = Payment if isinstance(Payment, Table) else Payment.__table__
+    key_table = (
+        KeyModelLocal
+        if isinstance(KeyModelLocal, Table)
+        else getattr(KeyModelLocal, "__table__", None)
+    )
+    plan_table = (
+        PlanModelLocal
+        if isinstance(PlanModelLocal, Table)
+        else getattr(PlanModelLocal, "__table__", None)
+    )
     user_table = (
         UserModel
         if isinstance(UserModel, Table)
@@ -407,7 +417,7 @@ async def get_utm_stats(
         else getattr(TrackingSourceModel, "__table__", None)
     )
 
-    if user_table is None or source_table is None:
+    if user_table is None or source_table is None or key_table is None or plan_table is None:
         raise RuntimeError("Failed to resolve tables for UTM analytics")
 
     pay_tg = payment_table.c.tg_id
@@ -418,20 +428,9 @@ async def get_utm_stats(
 
     users_tg = user_table.c.tg_id
     users_source = user_table.c.source_code
-    users_created = user_table.c.created_at
-
     excluded_systems = ("coupon", "referral", "cashback")
 
     source_alias = source_table.alias("utm_src")
-
-    reg_created_dt = users_created
-    try:
-        if isinstance(reg_created_dt.type, DateTime):
-            reg_created_ts = reg_created_dt
-        else:
-            reg_created_ts = func.to_timestamp(reg_created_dt / 1000.0)
-    except Exception:
-        reg_created_ts = func.to_timestamp(reg_created_dt / 1000.0)
 
     payments_with_source = (
         select(
@@ -550,21 +549,35 @@ async def get_utm_stats(
     )
 
     source_today_alias = source_table.alias("utm_today_src")
+    key_created_col = key_table.c.created_at
+    try:
+        if isinstance(key_created_col.type, DateTime):
+            trial_created_ts = key_created_col
+        else:
+            trial_created_ts = func.to_timestamp(key_created_col / 1000.0)
+    except Exception:
+        trial_created_ts = func.to_timestamp(key_created_col / 1000.0)
+
+    plan_group_col = plan_table.c.group_code
+    key_tg_col = key_table.c.tg_id
+    key_tariff_col = key_table.c.tariff_id
     today_clients_subq = (
         select(
             source_today_alias.c.code.label("source_code"),
-            func.count(func.distinct(users_tg)).label("new_clients_today"),
+            func.count(func.distinct(key_tg_col)).label("new_clients_today"),
         )
         .select_from(
-            user_table.join(
-                source_today_alias, users_source == source_today_alias.c.code
-            )
+            key_table
+            .join(plan_table, key_tariff_col == plan_table.c.id)
+            .join(user_table, key_tg_col == users_tg)
+            .join(source_today_alias, users_source == source_today_alias.c.code)
         )
         .where(
+            plan_group_col == "trial",
             users_source.is_not(None),
             source_today_alias.c.type == "utm",
-            reg_created_ts >= today_start,
-            reg_created_ts < today_end,
+            trial_created_ts >= today_start,
+            trial_created_ts < today_end,
         )
         .group_by(source_today_alias.c.code)
     ).subquery("utm_new_clients_today")
