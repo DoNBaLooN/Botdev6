@@ -383,6 +383,8 @@ async def get_utm_stats(
     current_end: datetime,
     previous_start: datetime,
     previous_end: datetime,
+    today_start: datetime,
+    today_end: datetime,
 ) -> list[dict[str, Any]]:
     if TrackingSourceModel is None or UserModel is None:
         raise RuntimeError("TrackingSource or User model is unavailable")
@@ -412,10 +414,20 @@ async def get_utm_stats(
 
     users_tg = user_table.c.tg_id
     users_source = user_table.c.source_code
+    users_created = user_table.c.created_at
 
     excluded_systems = ("coupon", "referral", "cashback")
 
     source_alias = source_table.alias("utm_src")
+
+    reg_created_dt = users_created
+    try:
+        if isinstance(reg_created_dt.type, DateTime):
+            reg_created_ts = reg_created_dt
+        else:
+            reg_created_ts = func.to_timestamp(reg_created_dt / 1000.0)
+    except Exception:
+        reg_created_ts = func.to_timestamp(reg_created_dt / 1000.0)
 
     payments_with_source = (
         select(
@@ -533,6 +545,26 @@ async def get_utm_stats(
         0.0,
     )
 
+    source_today_alias = source_table.alias("utm_today_src")
+    today_clients_subq = (
+        select(
+            source_today_alias.c.code.label("source_code"),
+            func.count(func.distinct(users_tg)).label("new_clients_today"),
+        )
+        .select_from(
+            user_table.join(
+                source_today_alias, users_source == source_today_alias.c.code
+            )
+        )
+        .where(
+            users_source.is_not(None),
+            source_today_alias.c.type == "utm",
+            reg_created_ts >= today_start,
+            reg_created_ts < today_end,
+        )
+        .group_by(source_today_alias.c.code)
+    ).subquery("utm_new_clients_today")
+
     query = (
         select(
             source_table.c.code.label("code"),
@@ -544,11 +576,17 @@ async def get_utm_stats(
             lifetime_total_amount.label("total_amount"),
             new_clients_count.label("new_clients"),
             new_revenue_sum.label("new_revenue"),
+            func.coalesce(today_clients_subq.c.new_clients_today, 0).label(
+                "new_clients_today"
+            ),
         )
         .select_from(
             source_table.outerjoin(
                 payments_with_source,
                 payments_with_source.c.source_code == source_table.c.code,
+            ).outerjoin(
+                today_clients_subq,
+                today_clients_subq.c.source_code == source_table.c.code,
             )
         )
         .where(source_table.c.type == "utm")
@@ -572,6 +610,7 @@ async def get_utm_stats(
         total_amount,
         new_clients,
         new_revenue,
+        new_clients_today,
     ) in rows:
         source_code = str(code or "")
         spend_amount = float(spend_map.get(source_code, 0.0))
@@ -590,6 +629,7 @@ async def get_utm_stats(
                 "total_amount": float(total_amount or 0.0),
                 "new_clients": new_clients_val,
                 "new_revenue": new_revenue_val,
+                "new_clients_today": int(new_clients_today or 0),
                 "ad_spend": spend_amount,
                 "cac": cac,
                 "roi": roi,

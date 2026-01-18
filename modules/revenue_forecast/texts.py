@@ -58,7 +58,8 @@ UTM_RENEWALS_VALUE = "└ 💵 Сумма: <b>{amount}</b>"
 
 UTM_PURCHASES_TITLE = "💳 Всего за весь период"
 UTM_PURCHASES_COUNT = "├ 🛒 Покупки: <b>{count}</b>"
-UTM_PURCHASES_SUM = "└ 💸 Сумма: <b>{amount}</b>"
+UTM_PURCHASES_SUM = "├ 💸 Сумма: <b>{amount}</b>"
+UTM_TODAY_NEW_CLIENTS = "└ 🆕 Новые клиенты за сегодня: <b>{count}</b>"
 
 UTM_ADS_TITLE = "📢 Реклама и эффективность"
 UTM_ADS_SPEND = "├ 📊 Расход за месяц: <b>{amount}</b>"
@@ -261,6 +262,7 @@ def render_utm_stats(data: dict) -> str:
             lines_all.extend([
                 UTM_PURCHASES_COUNT.format(count=int(entry.get("payments", 0))),
                 UTM_PURCHASES_SUM.format(amount=_fmt_money(entry.get("total_amount", 0.0))),
+                UTM_TODAY_NEW_CLIENTS.format(count=int(entry.get("new_clients_today", 0))),
             ])
 
             ads_spend_val = float(entry.get("ad_spend", 0.0))
