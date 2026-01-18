@@ -383,13 +383,17 @@ async def get_utm_stats(
     current_end: datetime,
     previous_start: datetime,
     previous_end: datetime,
-    today_start: datetime,
-    today_end: datetime,
+    today_start: datetime | None = None,
+    today_end: datetime | None = None,
 ) -> list[dict[str, Any]]:
     if TrackingSourceModel is None or UserModel is None:
         raise RuntimeError("TrackingSource or User model is unavailable")
 
     _, _, Payment = await _get_models(session)
+    if today_start is None or today_end is None:
+        now_utc = datetime.utcnow()
+        today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
 
     payment_table = Payment if isinstance(Payment, Table) else Payment.__table__
     user_table = (
