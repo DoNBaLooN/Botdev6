@@ -235,6 +235,10 @@ async def _prepare_utm_stats(session: AsyncSession, page: int) -> tuple[str, Any
     moscow_tz = pytz.timezone("Europe/Moscow")
     now_msk = datetime.now(moscow_tz)
     now_utc = now_msk.astimezone(pytz.UTC).replace(tzinfo=None)
+    today_start_msk = now_msk.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end_msk = today_start_msk + timedelta(days=1)
+    today_start_utc = today_start_msk.astimezone(pytz.UTC).replace(tzinfo=None)
+    today_end_utc = today_end_msk.astimezone(pytz.UTC).replace(tzinfo=None)
     current_start, current_end = await db.get_month_bounds(now_utc)
     previous_ref = current_start - timedelta(days=1)
     previous_start, previous_end = await db.get_month_bounds(previous_ref)
@@ -245,6 +249,8 @@ async def _prepare_utm_stats(session: AsyncSession, page: int) -> tuple[str, Any
         current_end,
         previous_start,
         previous_end,
+        today_start_utc,
+        today_end_utc,
     )
 
     items: list[dict[str, Any]] = []
@@ -256,6 +262,7 @@ async def _prepare_utm_stats(session: AsyncSession, page: int) -> tuple[str, Any
         total_amount_val = float(entry.get("total_amount", 0.0))
         new_clients_val = int(entry.get("new_clients", 0))
         new_revenue_val = float(entry.get("new_revenue", 0.0))
+        new_clients_today_val = int(entry.get("new_clients_today", 0))
         ad_spend_val = float(entry.get("ad_spend", 0.0))
         cac_val = entry.get("cac")
         roi_val = entry.get("roi")
@@ -281,6 +288,7 @@ async def _prepare_utm_stats(session: AsyncSession, page: int) -> tuple[str, Any
                 "total_amount": total_amount_val,
                 "new_clients": new_clients_val,
                 "new_revenue": new_revenue_val,
+                "new_clients_today": new_clients_today_val,
                 "ad_spend": ad_spend_val,
                 "cac": cac_val,
                 "roi": roi_val,
@@ -756,4 +764,3 @@ async def process_utm_ad_spend_amount(message: Message, session: AsyncSession, s
             )
         except Exception as exc:
             logger.error(f"[RF][UTM][ADS] refresh error: {exc}")
-
