@@ -607,7 +607,11 @@ async def get_utm_stats(
             )
         )
         .where(source_table.c.type == "utm")
-        .group_by(source_table.c.code, source_table.c.name)
+        .group_by(
+            source_table.c.code,
+            source_table.c.name,
+            today_clients_subq.c.new_clients_today,
+        )
         .order_by(source_table.c.code)
     )
 
