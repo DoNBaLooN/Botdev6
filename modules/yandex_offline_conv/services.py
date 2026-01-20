@@ -7,7 +7,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Callable, Iterable, Tuple
 
 import requests
@@ -168,6 +168,45 @@ def _coerce_truthy(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
+
+
+def _normalize_event_value(amount: Any) -> str | None:
+    if amount is None or isinstance(amount, bool):
+        return None
+
+    if isinstance(amount, str):
+        trimmed = amount.strip()
+        if not trimmed:
+            return None
+        trimmed = trimmed.replace(" ", "").replace(",", ".")
+        if trimmed.isdigit():
+            if int(trimmed) <= 0:
+                return None
+            return trimmed
+        try:
+            decimal_amount = Decimal(trimmed)
+        except (InvalidOperation, ValueError):
+            logger.debug(
+                "%s Unable to parse purchase amount for ev: %r",
+                texts.LOG_PREFIX,
+                amount,
+            )
+            return None
+    else:
+        try:
+            decimal_amount = Decimal(str(amount))
+        except (InvalidOperation, ValueError):
+            logger.debug(
+                "%s Unable to parse purchase amount for ev: %r",
+                texts.LOG_PREFIX,
+                amount,
+            )
+            return None
+
+    decimal_amount = decimal_amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    if decimal_amount <= 0:
+        return None
+    return str(int(decimal_amount))
 
 
 async def _evaluate_trial_condition(bound: inspect.BoundArguments) -> tuple[bool, dict[str, Any]]:
@@ -404,7 +443,10 @@ async def _handle_purchase_event(
 
     try:
         result = await _dispatch_send(
-            send_purchase, cid, counter_tid=counter_tid
+            send_purchase,
+            cid,
+            counter_tid=counter_tid,
+            amount=amount,
         )
     except Exception:
         logger.exception(
@@ -1142,7 +1184,11 @@ def send_trial_add(cid: str, *, counter_tid: str | None = None) -> SendResult:
 
 
 def send_purchase(
-    cid: str, order_id: str | None = None, *, counter_tid: str | None = None
+    cid: str,
+    order_id: str | None = None,
+    *,
+    counter_tid: str | None = None,
+    amount: Any = None,
 ) -> SendResult:
     pageview_result = send_pageview(cid, counter_tid=counter_tid)
     if not pageview_result.success:
@@ -1154,8 +1200,10 @@ def send_purchase(
     normalized_cid, base_payloads = prepared
 
     last_result: SendResult | None = None
+    event_value = _normalize_event_value(amount)
+    extra_payload = {"ev": event_value} if event_value is not None else None
     for base_payload in base_payloads:
-        payload = _event_payload(base_payload, ea="purchase")
+        payload = _event_payload(base_payload, ea="purchase", extra=extra_payload)
         last_result = _send_with_retry(
             "purchase",
             payload,
