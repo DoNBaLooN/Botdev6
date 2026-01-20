@@ -71,7 +71,7 @@ def _replace_function_references(original: Callable[..., Any], replacement: Call
                     replaced += 1
                 except Exception:  # pragma: no cover - defensive logging
                     logger.exception(
-                        "%s Failed to replace reference %s.%s during instrumentation",
+                        "{} Failed to replace reference {}.{} during instrumentation",
                         texts.LOG_PREFIX,
                         getattr(module, "__name__", module),
                         attr,
@@ -187,7 +187,7 @@ def _normalize_event_value(amount: Any) -> str | None:
             decimal_amount = Decimal(trimmed)
         except (InvalidOperation, ValueError):
             logger.debug(
-                "%s Unable to parse purchase amount for ev: %r",
+                "{} Unable to parse purchase amount for ev: {!r}",
                 texts.LOG_PREFIX,
                 amount,
             )
@@ -197,7 +197,7 @@ def _normalize_event_value(amount: Any) -> str | None:
             decimal_amount = Decimal(str(amount))
         except (InvalidOperation, ValueError):
             logger.debug(
-                "%s Unable to parse purchase amount for ev: %r",
+                "{} Unable to parse purchase amount for ev: {!r}",
                 texts.LOG_PREFIX,
                 amount,
             )
@@ -253,7 +253,7 @@ async def _has_existing_trial(session: AsyncSession | None, tg_id: Any) -> bool:
     try:
         numeric_tg_id = int(tg_id)
     except (TypeError, ValueError):
-        logger.warning("%s Unable to parse tg_id for trial check: %r", texts.LOG_PREFIX, tg_id)
+        logger.warning("{} Unable to parse tg_id for trial check: {!r}", texts.LOG_PREFIX, tg_id)
         return True
 
     try:
@@ -265,7 +265,7 @@ async def _has_existing_trial(session: AsyncSession | None, tg_id: Any) -> bool:
         trial_value = result.scalar_one_or_none()
     except Exception:
         logger.exception(
-            "%s Failed to check existing trial for tg_id=%s", texts.LOG_PREFIX, numeric_tg_id
+            "{} Failed to check existing trial for tg_id={}", texts.LOG_PREFIX, numeric_tg_id
         )
         return True
 
@@ -288,7 +288,7 @@ async def _has_successful_purchase(session: AsyncSession | None, tg_id: Any) -> 
         numeric_tg_id = int(tg_id)
     except (TypeError, ValueError):
         logger.warning(
-            "%s Unable to parse tg_id for purchase check: %r", texts.LOG_PREFIX, tg_id
+            "{} Unable to parse tg_id for purchase check: {!r}", texts.LOG_PREFIX, tg_id
         )
         return True
 
@@ -302,7 +302,7 @@ async def _has_successful_purchase(session: AsyncSession | None, tg_id: Any) -> 
         )
     except Exception:
         logger.exception(
-            "%s Failed to check existing purchase for tg_id=%s", texts.LOG_PREFIX, numeric_tg_id
+            "{} Failed to check existing purchase for tg_id={}", texts.LOG_PREFIX, numeric_tg_id
         )
         return True
 
@@ -318,7 +318,7 @@ async def _handle_trial_event(
 ) -> None:
     if session is None or not isinstance(session, AsyncSession):
         logger.debug(
-            "%s Skipping trial tracking (no session) for tg_id=%s context=%s",
+            "{} Skipping trial tracking (no session) for tg_id={} context={}",
             texts.LOG_PREFIX,
             tg_id,
             context,
@@ -329,7 +329,7 @@ async def _handle_trial_event(
         numeric_tg_id = int(tg_id)
     except (TypeError, ValueError):
         logger.warning(
-            "%s Skipping trial tracking due to invalid tg_id=%r context=%s",
+            "{} Skipping trial tracking due to invalid tg_id={!r} context={}",
             texts.LOG_PREFIX,
             tg_id,
             context,
@@ -340,7 +340,7 @@ async def _handle_trial_event(
         cid, counter_tid = await db.get_cid(session, numeric_tg_id)
     except Exception:
         logger.exception(
-            "%s Failed to look up cid for trial event (tg_id=%s context=%s)",
+            "{} Failed to look up cid for trial event (tg_id={} context={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             context,
@@ -349,7 +349,7 @@ async def _handle_trial_event(
 
     if not cid:
         logger.debug(
-            "%s No cid stored for trial event (tg_id=%s context=%s plan=%s)",
+            "{} No cid stored for trial event (tg_id={} context={} plan={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             context,
@@ -361,7 +361,7 @@ async def _handle_trial_event(
         result = await _dispatch_send(send_trial_add, cid, counter_tid=counter_tid)
     except Exception:
         logger.exception(
-            "%s Unexpected error while sending trial event (tg_id=%s context=%s)",
+            "{} Unexpected error while sending trial event (tg_id={} context={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             context,
@@ -371,7 +371,7 @@ async def _handle_trial_event(
     masked_cid = mask_cid(cid)
     if result.success:
         logger.info(
-            "%s Trial event sent (tg_id=%s cid=%s context=%s plan=%s)",
+            "{} Trial event sent (tg_id={} cid={} context={} plan={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             masked_cid,
@@ -380,7 +380,7 @@ async def _handle_trial_event(
         )
     else:
         logger.warning(
-            "%s Trial event failed (tg_id=%s cid=%s context=%s plan=%s status=%s message=%s)",
+            "{} Trial event failed (tg_id={} cid={} context={} plan={} status={} message={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             masked_cid,
@@ -401,7 +401,7 @@ async def _handle_purchase_event(
 ) -> None:
     if session is None or not isinstance(session, AsyncSession):
         logger.debug(
-            "%s Skipping purchase tracking (no session) for tg_id=%s context=%s",
+            "{} Skipping purchase tracking (no session) for tg_id={} context={}",
             texts.LOG_PREFIX,
             tg_id,
             context,
@@ -412,7 +412,7 @@ async def _handle_purchase_event(
         numeric_tg_id = int(tg_id)
     except (TypeError, ValueError):
         logger.warning(
-            "%s Skipping purchase tracking due to invalid tg_id=%r context=%s",
+            "{} Skipping purchase tracking due to invalid tg_id={!r} context={}",
             texts.LOG_PREFIX,
             tg_id,
             context,
@@ -423,7 +423,7 @@ async def _handle_purchase_event(
         cid, counter_tid = await db.get_cid(session, numeric_tg_id)
     except Exception:
         logger.exception(
-            "%s Failed to look up cid for purchase event (tg_id=%s context=%s)",
+            "{} Failed to look up cid for purchase event (tg_id={} context={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             context,
@@ -432,7 +432,7 @@ async def _handle_purchase_event(
 
     if not cid:
         logger.debug(
-            "%s No cid stored for purchase event (tg_id=%s context=%s amount=%s system=%s)",
+            "{} No cid stored for purchase event (tg_id={} context={} amount={} system={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             context,
@@ -450,7 +450,7 @@ async def _handle_purchase_event(
         )
     except Exception:
         logger.exception(
-            "%s Unexpected error while sending purchase event (tg_id=%s context=%s)",
+            "{} Unexpected error while sending purchase event (tg_id={} context={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             context,
@@ -460,7 +460,7 @@ async def _handle_purchase_event(
     masked_cid = mask_cid(cid)
     if result.success:
         logger.info(
-            "%s Purchase event sent (tg_id=%s cid=%s context=%s amount=%s system=%s)",
+            "{} Purchase event sent (tg_id={} cid={} context={} amount={} system={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             masked_cid,
@@ -470,7 +470,7 @@ async def _handle_purchase_event(
         )
     else:
         logger.warning(
-            "%s Purchase event failed (tg_id=%s cid=%s context=%s amount=%s system=%s status=%s message=%s)",
+            "{} Purchase event failed (tg_id={} cid={} context={} amount={} system={} status={} message={})",
             texts.LOG_PREFIX,
             numeric_tg_id,
             masked_cid,
@@ -487,7 +487,7 @@ def _instrument_create_key_on_cluster() -> None:
         from handlers.keys.operations import creation as key_creation
     except Exception as exc:
         logger.warning(
-            "%s Unable to import key creation module for instrumentation: %s",
+            "{} Unable to import key creation module for instrumentation: {}",
             texts.LOG_PREFIX,
             exc,
         )
@@ -505,13 +505,13 @@ def _instrument_create_key_on_cluster() -> None:
             bound = signature.bind_partial(*args, **kwargs)
         except TypeError:
             logger.exception(
-                "%s Failed to bind arguments for create_key_on_cluster instrumentation",
+                "{} Failed to bind arguments for create_key_on_cluster instrumentation",
                 texts.LOG_PREFIX,
             )
             return await original(*args, **kwargs)
 
         logger.debug(
-            "%s create_key_on_cluster instrumentation entry tg_id=%s named=%s",
+            "{} create_key_on_cluster instrumentation entry tg_id={} named={}",
             texts.LOG_PREFIX,
             bound.arguments.get("tg_id"),
             _sanitize_arguments(bound),
@@ -524,7 +524,7 @@ def _instrument_create_key_on_cluster() -> None:
             had_trial_before = await _has_existing_trial(session, tg_id)
         except Exception:
             logger.exception(
-                "%s Failed to check prior trial status (tg_id=%s)",
+                "{} Failed to check prior trial status (tg_id={})",
                 texts.LOG_PREFIX,
                 tg_id,
             )
@@ -535,7 +535,7 @@ def _instrument_create_key_on_cluster() -> None:
             should_track, debug_payload = await _evaluate_trial_condition(bound)
         except Exception:
             logger.exception(
-                "%s Failed to evaluate trial condition (tg_id=%s)",
+                "{} Failed to evaluate trial condition (tg_id={})",
                 texts.LOG_PREFIX,
                 bound.arguments.get("tg_id"),
             )
@@ -546,7 +546,7 @@ def _instrument_create_key_on_cluster() -> None:
             debug_context["plan_snapshot"] = _summarize_argument("plan", debug_context["plan_snapshot"])
 
         logger.debug(
-            "%s create_key_on_cluster instrumentation decision tg_id=%s track=%s details=%s",
+            "{} create_key_on_cluster instrumentation decision tg_id={} track={} details={}",
             texts.LOG_PREFIX,
             bound.arguments.get("tg_id"),
             should_track,
@@ -557,7 +557,7 @@ def _instrument_create_key_on_cluster() -> None:
             plan = debug_payload.get("plan_snapshot") or bound.arguments.get("plan")
             if had_trial_before:
                 logger.debug(
-                    "%s Skipping trial event for tg_id=%s (existing trial detected)",
+                    "{} Skipping trial event for tg_id={} (existing trial detected)",
                     texts.LOG_PREFIX,
                     tg_id,
                 )
@@ -571,7 +571,7 @@ def _instrument_create_key_on_cluster() -> None:
                     )
                 except Exception:
                     logger.exception(
-                        "%s Trial tracking handler raised (tg_id=%s context=create_key_on_cluster)",
+                        "{} Trial tracking handler raised (tg_id={} context=create_key_on_cluster)",
                         texts.LOG_PREFIX,
                         bound.arguments.get("tg_id"),
                     )
@@ -584,11 +584,11 @@ def _instrument_create_key_on_cluster() -> None:
     replaced = _replace_function_references(original, wrapped)
     if replaced:
         logger.debug(
-            "%s create_key_on_cluster references updated in %s locations",
+            "{} create_key_on_cluster references updated in {} locations",
             texts.LOG_PREFIX,
             replaced,
         )
-    logger.info("%s Instrumented create_key_on_cluster for trial tracking", texts.LOG_PREFIX)
+    logger.info("{} Instrumented create_key_on_cluster for trial tracking", texts.LOG_PREFIX)
 
 
 def _instrument_add_payment() -> None:
@@ -597,7 +597,7 @@ def _instrument_add_payment() -> None:
         import database as database_pkg
     except Exception as exc:
         logger.warning(
-            "%s Unable to import payments module for instrumentation: %s",
+            "{} Unable to import payments module for instrumentation: {}",
             texts.LOG_PREFIX,
             exc,
         )
@@ -615,13 +615,13 @@ def _instrument_add_payment() -> None:
             bound = signature.bind_partial(*args, **kwargs)
         except TypeError:
             logger.exception(
-                "%s Failed to bind arguments for add_payment instrumentation",
+                "{} Failed to bind arguments for add_payment instrumentation",
                 texts.LOG_PREFIX,
             )
             return await original(*args, **kwargs)
 
         logger.debug(
-            "%s add_payment instrumentation entry tg_id=%s named=%s",
+            "{} add_payment instrumentation entry tg_id={} named={}",
             texts.LOG_PREFIX,
             bound.arguments.get("tg_id"),
             _sanitize_arguments(bound),
@@ -634,7 +634,7 @@ def _instrument_add_payment() -> None:
             had_purchase_before = await _has_successful_purchase(session, tg_id)
         except Exception:
             logger.exception(
-                "%s Failed to check prior purchase status (tg_id=%s)",
+                "{} Failed to check prior purchase status (tg_id={})",
                 texts.LOG_PREFIX,
                 tg_id,
             )
@@ -646,7 +646,7 @@ def _instrument_add_payment() -> None:
 
         if had_purchase_before:
             logger.debug(
-                "%s Skipping purchase event for tg_id=%s (existing purchase detected)",
+                "{} Skipping purchase event for tg_id={} (existing purchase detected)",
                 texts.LOG_PREFIX,
                 tg_id,
             )
@@ -661,7 +661,7 @@ def _instrument_add_payment() -> None:
                 )
             except Exception:
                 logger.exception(
-                    "%s Purchase tracking handler raised (tg_id=%s context=add_payment)",
+                    "{} Purchase tracking handler raised (tg_id={} context=add_payment)",
                     texts.LOG_PREFIX,
                     tg_id,
                 )
@@ -676,11 +676,11 @@ def _instrument_add_payment() -> None:
     replaced = _replace_function_references(original, wrapped)
     if replaced:
         logger.debug(
-            "%s add_payment references updated in %s locations",
+            "{} add_payment references updated in {} locations",
             texts.LOG_PREFIX,
             replaced,
         )
-    logger.info("%s Instrumented add_payment for purchase tracking", texts.LOG_PREFIX)
+    logger.info("{} Instrumented add_payment for purchase tracking", texts.LOG_PREFIX)
 
 
 def _instrument_update_trial() -> None:
@@ -689,7 +689,7 @@ def _instrument_update_trial() -> None:
         import database as database_pkg
     except Exception as exc:
         logger.warning(
-            "%s Unable to import users module for instrumentation: %s",
+            "{} Unable to import users module for instrumentation: {}",
             texts.LOG_PREFIX,
             exc,
         )
@@ -707,13 +707,13 @@ def _instrument_update_trial() -> None:
             bound = signature.bind_partial(*args, **kwargs)
         except TypeError:
             logger.exception(
-                "%s Failed to bind arguments for update_trial instrumentation",
+                "{} Failed to bind arguments for update_trial instrumentation",
                 texts.LOG_PREFIX,
             )
             return await original(*args, **kwargs)
 
         logger.debug(
-            "%s update_trial instrumentation entry tg_id=%s named=%s",
+            "{} update_trial instrumentation entry tg_id={} named={}",
             texts.LOG_PREFIX,
             bound.arguments.get("tg_id"),
             _sanitize_arguments(bound),
@@ -726,7 +726,7 @@ def _instrument_update_trial() -> None:
             had_trial_before = await _has_existing_trial(session, tg_id)
         except Exception:
             logger.exception(
-                "%s Failed to check prior trial status (tg_id=%s)",
+                "{} Failed to check prior trial status (tg_id={})",
                 texts.LOG_PREFIX,
                 tg_id,
             )
@@ -737,7 +737,7 @@ def _instrument_update_trial() -> None:
 
         if status == 1 and had_trial_before:
             logger.debug(
-                "%s Skipping trial event for tg_id=%s (existing trial detected)",
+                "{} Skipping trial event for tg_id={} (existing trial detected)",
                 texts.LOG_PREFIX,
                 tg_id,
             )
@@ -750,7 +750,7 @@ def _instrument_update_trial() -> None:
                 )
             except Exception:
                 logger.exception(
-                    "%s Trial tracking handler raised (tg_id=%s context=update_trial)",
+                    "{} Trial tracking handler raised (tg_id={} context=update_trial)",
                     texts.LOG_PREFIX,
                     tg_id,
                 )
@@ -765,11 +765,11 @@ def _instrument_update_trial() -> None:
     replaced = _replace_function_references(original, wrapped)
     if replaced:
         logger.debug(
-            "%s update_trial references updated in %s locations",
+            "{} update_trial references updated in {} locations",
             texts.LOG_PREFIX,
             replaced,
         )
-    logger.info("%s Instrumented update_trial for trial tracking", texts.LOG_PREFIX)
+    logger.info("{} Instrumented update_trial for trial tracking", texts.LOG_PREFIX)
 
 
 def _instrument_handle_utm_link() -> None:
@@ -787,7 +787,7 @@ def _instrument_handle_utm_link() -> None:
             bound = signature.bind_partial(*args, **kwargs)
         except TypeError:
             logger.exception(
-                "%s Failed to bind arguments for handle_utm_link instrumentation",
+                "{} Failed to bind arguments for handle_utm_link instrumentation",
                 texts.LOG_PREFIX,
             )
             return await original(*args, **kwargs)
@@ -797,7 +797,7 @@ def _instrument_handle_utm_link() -> None:
 
         if cleaned_utm and cleaned_utm != utm_code:
             logger.debug(
-                "%s Trimmed cid from utm_code=%r -> %r (cid=%s)",
+                "{} Trimmed cid from utm_code={!r} -> {!r} (cid={})",
                 texts.LOG_PREFIX,
                 utm_code,
                 cleaned_utm,
@@ -814,11 +814,11 @@ def _instrument_handle_utm_link() -> None:
     replaced = _replace_function_references(original, wrapped)
     if replaced:
         logger.debug(
-            "%s handle_utm_link references updated in %s locations",
+            "{} handle_utm_link references updated in {} locations",
             texts.LOG_PREFIX,
             replaced,
         )
-    logger.info("%s Instrumented handle_utm_link for UTM trimming", texts.LOG_PREFIX)
+    logger.info("{} Instrumented handle_utm_link for UTM trimming", texts.LOG_PREFIX)
 
 
 def install_instrumentation() -> None:
@@ -890,7 +890,7 @@ def extract_cid(part: str) -> Tuple[str | None, str | None, str | None]:
         elif base_prefix and trimmed_lower == base_prefix:
             cleaned_part = trimmed_part.rstrip(_PREFIX_STRIP_CHARS) or trimmed_part
             logger.debug(
-                "%s Prefix trim match (base): part=%r prefix=%r base_prefix=%r cleaned_part=%r",
+                "{} Prefix trim match (base): part={!r} prefix={!r} base_prefix={!r} cleaned_part={!r}",
                 texts.LOG_PREFIX,
                 trimmed_part,
                 prefix,
@@ -920,7 +920,7 @@ def extract_cid(part: str) -> Tuple[str | None, str | None, str | None]:
         cleaned_part = cleaned_part.rstrip(_PREFIX_STRIP_CHARS) or None
         masked_candidate = mask_cid(candidate) if candidate else None
         logger.debug(
-            "%s Prefix trim: part=%r prefix=%r base_prefix=%r remainder=%r candidate=%r cleaned_part=%r",
+            "{} Prefix trim: part={!r} prefix={!r} base_prefix={!r} remainder={!r} candidate={!r} cleaned_part={!r}",
             texts.LOG_PREFIX,
             trimmed_part,
             prefix,
@@ -966,7 +966,7 @@ async def store_cid(
 ) -> None:
 
     logger.debug(
-        "%s Storing cid=%s for tg_id=%s (start_part=%r, cleaned_part=%r)",
+        "{} Storing cid={} for tg_id={} (start_part={!r}, cleaned_part={!r})",
         texts.LOG_PREFIX,
         _mask_cid(cid),
         tg_id,
@@ -995,7 +995,7 @@ def _iter_counter_payloads(
                 break
         else:
             logger.warning(
-                "%s Counter tid=%s not configured; falling back to all counters",
+                "{} Counter tid={} not configured; falling back to all counters",
                 texts.LOG_PREFIX,
                 matching_tid,
             )
@@ -1011,7 +1011,7 @@ def _iter_counter_payloads(
 
     if not yielded:
         logger.error(
-            "%s Measurement Protocol credentials are not configured for any counter (cid=%s)",
+            "{} Measurement Protocol credentials are not configured for any counter (cid={})",
             texts.LOG_PREFIX,
             _mask_cid(normalized_cid),
         )
@@ -1023,7 +1023,7 @@ def _prepare_common_payload(
     normalized = _normalize_cid(cid)
     if not normalized:
         message = "ClientID (cid) must be a non-empty string"
-        logger.warning("%s %s", texts.LOG_PREFIX, message)
+        logger.warning("{} {}", texts.LOG_PREFIX, message)
         return SendResult(False, None, message)
 
     payloads = list(_iter_counter_payloads(normalized, counter_tid=counter_tid))
@@ -1053,7 +1053,7 @@ def _send_with_retry(kind: str, payload: dict[str, str], cid: str, *, counter_id
         except RequestException as exc:  # network error
             last_message = str(exc)
             logger.warning(
-                "%s MP %s request error (attempt %s/%s, cid=%s, counter=%s): %s",
+                "{} MP {} request error (attempt {}/{}, cid={}, counter={}): {}",
                 texts.LOG_PREFIX,
                 kind,
                 attempt,
@@ -1072,7 +1072,7 @@ def _send_with_retry(kind: str, payload: dict[str, str], cid: str, *, counter_id
         body = response.text
         if 200 <= status < 300:
             logger.info(
-                "%s MP %s delivered (cid=%s, counter=%s, status=%s)",
+                "{} MP {} delivered (cid={}, counter={}, status={})",
                 texts.LOG_PREFIX,
                 kind,
                 masked_cid,
@@ -1084,7 +1084,7 @@ def _send_with_retry(kind: str, payload: dict[str, str], cid: str, *, counter_id
         last_message = f"status={status} body={body}"
         if 500 <= status < 600:
             logger.warning(
-                "%s MP %s server error (attempt %s/%s, cid=%s, counter=%s, status=%s)",
+                "{} MP {} server error (attempt {}/{}, cid={}, counter={}, status={})",
                 texts.LOG_PREFIX,
                 kind,
                 attempt,
@@ -1100,7 +1100,7 @@ def _send_with_retry(kind: str, payload: dict[str, str], cid: str, *, counter_id
             continue
 
         logger.error(
-            "%s MP %s rejected (cid=%s, counter=%s, status=%s)",
+            "{} MP {} rejected (cid={}, counter={}, status={})",
             texts.LOG_PREFIX,
             kind,
             masked_cid,
